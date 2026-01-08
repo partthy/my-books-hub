@@ -58,7 +58,18 @@ async function connectDB(): Promise<typeof mongoose> {
     // Wait for connection to resolve and cache it
     cached.conn = await cached.promise;
   } catch (error) {
-    // Reset promise on error to allow retry
+    // Close stale connection if it exists to prevent resource leaks
+    if (cached.conn) {
+      try {
+        // Attempt to close the connection using available close methods
+        await cached.conn.connection?.close();
+      } catch (closeError) {
+        console.error("⚠️ Error closing stale connection:", closeError);
+      }
+      cached.conn = null;
+    }
+
+    // Reset promise to allow retry
     cached.promise = null;
     console.error("❌ MongoDB connection error:", error);
     throw error;

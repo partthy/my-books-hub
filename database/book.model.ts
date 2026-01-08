@@ -107,11 +107,32 @@ const BookSchema = new Schema<IBook>(
   }
 );
 
-// Pre-save hook to generate slug from title
-BookSchema.pre("save", function () {
+// Pre-save hook to generate unique slug from title
+BookSchema.pre("save", async function () {
   // Only generate slug if title is modified or document is new
   if (this.isModified("title") || this.isNew) {
-    this.slug = generateSlug(this.title);
+    const baseSlug = generateSlug(this.title);
+    let candidateSlug = baseSlug;
+    let counter = 1;
+
+    // Check for slug collisions and append counter if needed
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const existing = await models.Book.exists({
+        slug: candidateSlug,
+        _id: { $ne: this._id }, // Exclude current document
+      });
+
+      if (!existing) {
+        // Unique slug found
+        this.slug = candidateSlug;
+        break;
+      }
+
+      // Append counter and try again
+      candidateSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
   }
 });
 
