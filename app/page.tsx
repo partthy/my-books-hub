@@ -1,8 +1,15 @@
 import BookCard from "@/components/BookCard";
 import ExploreBtn from "@/components/ExploreBtn";
-import { books } from "@/lib/constants";
+import { IBook } from "@/database";
 
-const page = () => {
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+
+const page = async () => {
+  const response = await fetch(`${BASE_URL}/api/books`, {
+    cache: "no-store",
+  });
+  const { books } = await response.json();
+
   return (
     <section>
       <h1 className="text-center p-4">The Hub for Knowledge Base</h1>
@@ -13,17 +20,26 @@ const page = () => {
       <div className="mt-20 space-y-7">
         <h3>Featured Books</h3>
         <ul className="events">
-          {books.map((book) => (
-            <li key={book.title}>
-              <BookCard {...book} />
-            </li>
-          ))}
+          {books &&
+            books.length > 0 &&
+            books.map((book: IBook) => (
+              <li key={book.title}>
+                <BookCard
+                  image={book.coverImageUrl}
+                  title={book.title}
+                  slug={book.slug}
+                  author={book.authors[0]}
+                  genre={book.tags[0]}
+                  publishedYear={book.publishedYear}
+                  rating={book.rating}
+                  description={book.description}
+                />
+              </li>
+            ))}
         </ul>
       </div>
-      
     </section>
   );
-}
+};
 
-export default page
-
+export default page;
