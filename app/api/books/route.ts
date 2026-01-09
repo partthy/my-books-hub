@@ -2,9 +2,8 @@ import { Book } from "@/database";
 
 import connectDB from "@/lib/mongodb";
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
-
 
 // Configuration for file validation
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -64,6 +63,19 @@ export async function POST(req: NextRequest) {
       const uploadDir = path.join(process.cwd(), "public", "uploads");
       const filePath = path.join(uploadDir, fileName);
 
+      // Ensure upload directory exists before writing file
+      try {
+        await mkdir(uploadDir, { recursive: true });
+      } catch (dirError) {
+        console.error("Error creating upload directory:", dirError);
+        return NextResponse.json(
+          {
+            message: "Failed to create upload directory",
+          },
+          { status: 500 }
+        );
+      }
+
       // Save file to disk
       await writeFile(filePath, buffer);
 
@@ -109,8 +121,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create book in database
-    const createdBook = await Book.create(bookData);
+    // Create book in database with cleanup on failure
+    let createdBook;
+    try {
+      createdBook = await Book.create(bookData);
+    } catch (dbError) {
+      // If database creation fails and a file was uploaded, delete it
+      if (filePath && coverImageUrl) {
+        try {
+          await unlink(filePath);
+          console.log(`Cleaned up uploaded file: ${filePath}`);
+        } catch (unlinkError) {
+          console.error(
+            "Failed to delete uploaded file after DB error:",
+            unlinkError
+          );
+        }
+      }
+
+      // Log the full error server-side for diagnostics
+      console.error("Database creation error:", dbError);
+
+      // Return generic error response without exposing internal details
+      return NextResponse.json(
+        {
+          message: "Failed to save book to database",
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       {
@@ -120,26 +159,31 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error(error);
+    // Log full error details server-side for diagnostics
+    console.error("Book creation failed:", error);
+
+    // Return generic error response without exposing internal details
     return NextResponse.json(
       {
-        message: "Book Creation Failed",
-        error: error instanceof Error ? error.message : "Unknown",
+        message: "Book creation failed",
       },
       { status: 500 }
     );
   }
 }
 
-
 export async function GET() {
-    try {
-        await connectDB();
-        const books = await Book.find().sort({ createdAt: -1 })
-        return NextResponse.json({message: 'Books fetched successfully', books}, {status:200})
-    } catch (error) {
-        return NextResponse.json({ message: "Books fetching failed", error: error }, { status: 500 })
-        
-    }
+  try {
+    await connectDB();
+    const books = await Book.find().sort({ createdAt: -1 });
+    return NextResponse.json(
+      { message: "Books fetched successfully", books },
+      { status: 200 }
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { message: "Books fetching failed", error: error },
+      { status: 500 }
+    );
+  }
 }
-
