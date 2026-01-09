@@ -99,7 +99,9 @@ export async function GET(
       {
         success: false,
         message: "Failed to fetch book",
-        error: error instanceof Error ? error.message : "Unknown error",
+        ...(process.env.NODE_ENV === 'development' && {
+          error: error instanceof Error ? error.message : "Unknown error",
+        }),
       },
       { status: 500 }
     );
